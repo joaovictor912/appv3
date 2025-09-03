@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "183764560118",
+    "project_id": "corretor-gabaritos-app",
+    "storage_bucket": "corretor-gabaritos-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:183764560118:android:78af17a3d9e581b53da4d7",
+        "android_client_info": {
+          "package_name": "com.corretordegabaritos.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "183764560118-5c25la4vn3r70m5ilaqjsjtighd8uj3d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.corretordegabaritos.app",
+            "certificate_hash": "800de1c2618b7afb9421a4338dc121101d7b50b5"
+          }
+        },
+        {
+          "client_id": "183764560118-4bs0dfu7funreaefd56ep1himhdq3t74.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDAYRT20mus7S3Be3YeAzc4Dbk_QRqZP6w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "183764560118-4bs0dfu7funreaefd56ep1himhdq3t74.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "183764560118-1dhf6vprg2q54h92qhtq53c1qpp4rr9u.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fluterApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
