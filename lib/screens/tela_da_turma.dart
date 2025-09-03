@@ -1,8 +1,10 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../models/prova.dart';
 import '../models/turma.dart';
+import '../services/database_service.dart';
 import 'tela_da_prova.dart';
 import 'tela_gabarito_mestre.dart';
 import 'tela_gerir_alunos.dart';
@@ -24,6 +26,7 @@ class TelaDaTurma extends StatefulWidget {
 }
 
 class _TelaDaTurmaState extends State<TelaDaTurma> {
+  // Função para criar uma nova prova, agora salvando no banco de dados.
   void _mostrarDialogoNovaProva() {
     final TextEditingController nomeController = TextEditingController();
     final TextEditingController questoesController = TextEditingController();
@@ -42,12 +45,10 @@ class _TelaDaTurmaState extends State<TelaDaTurma> {
                   TextField(
                     controller: nomeController,
                     autofocus: true,
-                    style: const TextStyle(color: Colors.black),
                     decoration: const InputDecoration(labelText: 'Nome da Prova'),
                   ),
                   TextField(
                     controller: questoesController,
-                    style: const TextStyle(color: Colors.black),
                     decoration: const InputDecoration(labelText: 'Nº de Questões'),
                     keyboardType: TextInputType.number,
                   ),
@@ -60,7 +61,7 @@ class _TelaDaTurmaState extends State<TelaDaTurma> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.calendar_today, color: Colors.black),
+                        icon: const Icon(Icons.calendar_today),
                         onPressed: () async {
                           final DateTime? dataEscolhida = await showDatePicker(
                             context: context,
@@ -85,25 +86,22 @@ class _TelaDaTurmaState extends State<TelaDaTurma> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (nomeController.text.isNotEmpty) {
-                      final int numeroDeQuestoes =
-                          int.tryParse(questoesController.text) ?? 20;
+                      final int numeroDeQuestoes = int.tryParse(questoesController.text) ?? 10;
 
-                      setState(() {
-                        widget.turma.provas.add(
-                          // CORREÇÃO APLICADA AQUI
-                          // O parâmetro "turma" foi removido da criação da Prova.
-                          Prova(
-                            id: DateTime.now().toString(),
-                            nome: nomeController.text,
-                            data: DateFormat('dd/MM/yyyy').format(dataSelecionada),
-                            numeroDeQuestoes: numeroDeQuestoes,
-                          ),
-                        );
-                      });
+                      final novaProva = Prova(
+                        nome: nomeController.text,
+                        data: DateFormat('dd/MM/yyyy').format(dataSelecionada),
+                        numeroDeQuestoes: numeroDeQuestoes,
+                      );
 
-                      widget.onDadosAlterados();
+                      // Salva a nova prova no banco, associada ao ID da turma atual
+                      await DatabaseService.instance.createProva(novaProva, widget.turma.id!);
+                      
+                      // Atualiza a tela para o FutureBuilder buscar a nova lista
+                      setState(() {});
+                      
                       Navigator.pop(context);
                     }
                   },
@@ -140,70 +138,94 @@ class _TelaDaTurmaState extends State<TelaDaTurma> {
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(8.0),
-        itemCount: widget.turma.provas.length,
-        itemBuilder: (context, index) {
-          final prova = widget.turma.provas[index];
-          return Dismissible(
-            key: Key(prova.id),
-            direction: DismissDirection.endToStart,
-            background: Container(
-              color: Colors.redAccent,
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: const Icon(Icons.delete_sweep, color: Colors.black),
-            ),
-            onDismissed: (direction) {
-              final nomeProvaRemovida = prova.nome;
-              setState(() {
-                widget.turma.provas.removeAt(index);
-              });
-              widget.onDadosAlterados();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"$nomeProvaRemovida" removida')),
+      body: FutureBuilder<List<Prova>>(
+        // O FutureBuilder agora é a fonte de dados, buscando direto do banco
+        future: DatabaseService.instance.getProvasParaTurma(widget.turma.id!),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Erro ao carregar provas: ${snapshot.error}"));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text(
+                "Nenhuma prova cadastrada.\nClique em '+' para adicionar a primeira.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+            );
+          }
+
+          final provas = snapshot.data!;
+          return ListView.builder(
+            padding: const EdgeInsets.all(8.0),
+            itemCount: provas.length,
+            itemBuilder: (context, index) {
+              final prova = provas[index];
+              return Dismissible(
+                key: Key(prova.id.toString()),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: Colors.redAccent,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: const Icon(Icons.delete_sweep, color: Colors.white),
+                ),
+                onDismissed: (direction) async {
+                  final nomeProvaRemovida = prova.nome;
+                  // Deleta a prova permanentemente do banco de dados
+                  await DatabaseService.instance.deleteProva(prova.id!);
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('"$nomeProvaRemovida" removida')),
+                  );
+                  // Atualiza o estado para garantir que a lista seja recarregada
+                  setState(() {});
+                },
+                child: Card(
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.article_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 40,
+                    ),
+                    title: Text(prova.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text("${prova.correcoes.length} correções • ${prova.numeroDeQuestoes} questões"),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.playlist_add_check),
+                      tooltip: 'Editar Gabarito',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TelaGabaritoMestre(
+                              prova: prova,
+                              // O callback aqui pode ser usado para forçar um setState na volta
+                              onGabaritoSalvo: () => setState((){}), 
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TelaDaProva(
+                            turma: widget.turma,
+                            prova: prova,
+                            camera: widget.camera,
+                            onDadosAlterados: () => setState((){}),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               );
             },
-            child: Card(
-              child: ListTile(
-                leading: Icon(
-                  Icons.article_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 30,
-                ),
-                title: Text(prova.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("${prova.correcoes.length} correções • ${prova.numeroDeQuestoes} questões"),
-                trailing: IconButton(
-                  icon: const Icon(Icons.playlist_add_check),
-                  tooltip: 'Editar Gabarito',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => TelaGabaritoMestre(
-                          prova: prova,
-                          onGabaritoSalvo: widget.onDadosAlterados,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      settings: const RouteSettings(name: '/telaDaProva'),
-                      builder: (context) => TelaDaProva(
-                        turma: widget.turma, // Passa a turma atual
-                        prova: prova,
-                        camera: widget.camera,
-                        onDadosAlterados: widget.onDadosAlterados,
-                      ),
-                    ),
-                  ).then((_) => setState((){}));
-                },
-              ),
-            ),
           );
         },
       ),

@@ -8,82 +8,61 @@ class ClassificadorService {
   late List<String> _labels;
   Interpreter? _interpreter;
 
-  // Inicializa o modelo e os rótulos
   Future<void> initialize() async {
-    if (_isInitialized) return; // evita inicialização dupla
+    if (_isInitialized) return;
 
-    // Carrega os labels
     final labelsData = await rootBundle.loadString('assets/models/classificador_bolhas_labels.txt');
     _labels = labelsData.split('\n').where((label) => label.isNotEmpty).toList();
 
-    // Carrega o modelo com o Interpreter
-    _interpreter = await Interpreter.fromAsset('models/classificador_bolhas.tflite');
+    // SUGESTÃO 1: Corrigido o caminho do asset
+    _interpreter = await Interpreter.fromAsset('assets/models/classificador_bolhas.tflite');
 
     _isInitialized = true;
-    print("✅ Classificador inicializado com TensorFlow Lite!");
   }
 
-  // Classifica uma bolha a partir de uma imagem
   Future<String> classificarBolha(Uint8List imageBytes) async {
     if (!_isInitialized || _interpreter == null) {
       throw Exception("Serviço não inicializado. Chame initialize() primeiro.");
     }
 
-    // Prepara a entrada
-    var input = _prepararImagem(imageBytes);
+    // SUGESTÃO 3: A entrada agora é um Float32List e o reshape é feito no final
+    final inputTensor = _prepararImagem(imageBytes);
+    final input = inputTensor.reshape([1, 224, 224, 3]);
 
-    // Saída: assumindo que seu modelo retorna vetor [1, num_classes]
     var output = List.filled(_labels.length, 0.0).reshape([1, _labels.length]);
 
-    // Executa o modelo
     _interpreter!.run(input, output);
-
-    // Encontra a classe com maior probabilidade
-    double maiorValor = -1;
-    int indice = -1;
-    for (int i = 0; i < _labels.length; i++) {
-      if (output[0][i] > maiorValor) {
-        maiorValor = output[0][i];
-        indice = i;
-      }
-    }
+    
+    // SUGESTÃO 2: Lógica simplificada para encontrar o melhor resultado
+    final outputList = output[0].cast<double>();
+    double maiorValor = outputList.reduce((a, b) => a > b ? a : b);
+    int indice = outputList.indexOf(maiorValor);
 
     return indice == -1 ? "desconhecido" : _labels[indice];
   }
-
-  // Pré-processa a imagem (224x224 RGB normalizado em Float32)
-  List<List<List<List<double>>>> _prepararImagem(Uint8List imageBytes) {
+  
+  // SUGESTÃO 3: Refatorado para usar Float32List para melhor performance
+  Float32List _prepararImagem(Uint8List imageBytes) {
     final originalImage = img.decodeImage(imageBytes);
     if (originalImage == null) {
       throw Exception("Não foi possível decodificar a imagem.");
     }
 
-    // Redimensiona
     final resizedImage = img.copyResize(originalImage, width: 224, height: 224);
 
-    // Modelo espera [1, 224, 224, 3]
-    var input = List.generate(
-      1,
-      (_) => List.generate(
-        224,
-        (y) => List.generate(
-          224,
-          (x) {
-            final pixel = resizedImage.getPixel(x, y);
-            return [
-              pixel.r / 255.0,
-              pixel.g / 255.0,
-              pixel.b / 255.0,
-            ];
-          },
-        ),
-      ),
-    );
-
-    return input;
+    final inputBytes = Float32List(1 * 224 * 224 * 3);
+    int pixelIndex = 0;
+    for (var y = 0; y < 224; y++) {
+      for (var x = 0; x < 224; x++) {
+        final pixel = resizedImage.getPixel(x, y);
+        inputBytes[pixelIndex++] = pixel.r / 255.0;
+        inputBytes[pixelIndex++] = pixel.g / 255.0;
+        inputBytes[pixelIndex++] = pixel.b / 255.0;
+      }
+    }
+    return inputBytes;
   }
 
-  // Libera os recursos
   void dispose() {
     _interpreter?.close();
     _isInitialized = false;

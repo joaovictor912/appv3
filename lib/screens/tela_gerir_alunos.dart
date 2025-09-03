@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/aluno.dart';
 import '../models/turma.dart';
+import '../services/database_service.dart';
 
 class TelaGerirAlunos extends StatefulWidget {
   final Turma turma;
   final VoidCallback onDadosAlterados;
 
   const TelaGerirAlunos({
-    super.key, 
-    required this.turma, 
-    required this.onDadosAlterados
+    super.key,
+    required this.turma,
+    required this.onDadosAlterados,
   });
 
   @override
@@ -17,14 +18,7 @@ class TelaGerirAlunos extends StatefulWidget {
 }
 
 class _TelaGerirAlunosState extends State<TelaGerirAlunos> {
-
-  void _removerAluno(Aluno alunoParaRemover) {
-    setState(() {
-      widget.turma.alunos.removeWhere((aluno) => aluno.id == alunoParaRemover.id);
-    });
-    widget.onDadosAlterados();
-  }
-
+  // Função para adicionar um novo aluno, agora salvando no banco de dados.
   void _mostrarDialogoNovoAluno() {
     final nomeController = TextEditingController();
     final matriculaController = TextEditingController();
@@ -40,14 +34,12 @@ class _TelaGerirAlunosState extends State<TelaGerirAlunos> {
               TextField(
                 controller: nomeController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.black),
                 decoration: const InputDecoration(hintText: 'Nome do Aluno'),
                 textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: matriculaController,
-                style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(hintText: 'ID / Matrícula do Aluno'),
                 keyboardType: TextInputType.text,
               ),
@@ -57,19 +49,24 @@ class _TelaGerirAlunosState extends State<TelaGerirAlunos> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nomeController.text.isNotEmpty && matriculaController.text.isNotEmpty) {
+                // 1. Cria o objeto Aluno SEM o ID (o banco vai gerar)
                 final novoAluno = Aluno(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
                   nome: nomeController.text,
                   matricula: matriculaController.text,
                 );
 
-                setState(() {
-                  widget.turma.alunos.add(novoAluno);
-                });
+                // 2. Chama o DatabaseService para salvar o aluno
+                await DatabaseService.instance.createAluno(novoAluno, widget.turma.id!);
                 
+                // 3. Notifica a tela anterior que houve uma mudança
                 widget.onDadosAlterados();
+
+                // 4. Apenas atualiza a tela para o FutureBuilder recarregar a lista
+                setState(() {});
+                
+                if (!mounted) return; // Verificação de segurança
                 Navigator.pop(context);
               }
             },
@@ -82,46 +79,58 @@ class _TelaGerirAlunosState extends State<TelaGerirAlunos> {
 
   @override
   Widget build(BuildContext context) {
-    // Cria uma cópia ordenada da lista de alunos para exibição.
-    final alunosOrdenados = List<Aluno>.from(widget.turma.alunos);
-    alunosOrdenados.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Alunos de "${widget.turma.nome}"'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.upload_file),
-            tooltip: 'Importar Alunos (CSV)',
-            onPressed: () {
-              // A lógica de importação _importarAlunosDeCsv() seria chamada aqui.
-              // Implementação futura.
-            },
-          ),
+          // Seu botão de importar CSV pode continuar aqui
         ],
       ),
-      body: alunosOrdenados.isEmpty
-        ? const Center(
-            child: Text(
-              'Nenhum aluno cadastrado.\nClique no botão "+" para adicionar.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
-            ),
-          )
-        : ListView.builder(
-            itemCount: alunosOrdenados.length,
+      // O corpo agora é um FutureBuilder que busca os alunos da turma no banco
+      body: FutureBuilder<List<Aluno>>(
+        future: DatabaseService.instance.getAlunosParaTurma(widget.turma.id!),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Erro ao carregar alunos: ${snapshot.error}"));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text(
+                'Nenhum aluno cadastrado.\nClique no botão "+" para adicionar.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+            );
+          }
+
+          final alunos = snapshot.data!;
+          // Ordena a lista de alunos para exibição
+          alunos.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+
+          return ListView.builder(
+            itemCount: alunos.length,
             itemBuilder: (context, index) {
-              final aluno = alunosOrdenados[index];
+              final aluno = alunos[index];
               return ListTile(
                 title: Text(aluno.nome),
                 subtitle: Text("Matrícula: ${aluno.matricula}"),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                  onPressed: () => _removerAluno(aluno),
+                  onPressed: () async {
+                    // Deleta o aluno diretamente do banco de dados
+                    await DatabaseService.instance.deleteAluno(aluno.id!);
+                    widget.onDadosAlterados();
+                    setState(() {}); // Atualiza a tela para recarregar a lista
+                  },
                 ),
               );
             },
-          ),
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _mostrarDialogoNovoAluno,
         label: const Text('Novo Aluno'),
