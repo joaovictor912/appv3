@@ -85,21 +85,16 @@ class DatabaseService {
   }
 
   Future<List<Turma>> getTurmas() async {
-    final db = await instance.database;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return [];
+  final db = await instance.database;
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return [];
 
-    final maps = await db.query('turmas', where: 'userId = ?', whereArgs: [user.uid]);
-    
-    List<Turma> turmas = List.generate(maps.length, (i) => Turma.fromMap(maps[i]));
-    
-    // Para cada turma, carregamos também a contagem de alunos e provas
-    for (var turma in turmas) {
-      turma.alunos = await getAlunosParaTurma(turma.id!);
-      turma.provas = await getProvasParaTurma(turma.id!);
-    }
-    return turmas;
-  }
+  final maps = await db.query('turmas', where: 'userId = ?', whereArgs: [user.uid]);
+  
+  // AGORA, ele só retorna a lista de turmas, sem carregar os detalhes (alunos e provas).
+  // Isso é muito mais rápido e eficiente.
+  return List.generate(maps.length, (i) => Turma.fromMap(maps[i]));
+}
 
   // --- MÉTODOS PARA PROVAS ---
   Future<int> createProva(Prova prova, int turmaId) async {
@@ -165,4 +160,22 @@ class DatabaseService {
     final db = await instance.database;
     db.close();
   }
+  Future<Turma> getTurmaById(int id) async {
+  final db = await instance.database;
+  final maps = await db.query(
+    'turmas',
+    where: 'id = ?',
+    whereArgs: [id],
+  );
+
+  if (maps.isNotEmpty) {
+    final turma = Turma.fromMap(maps.first);
+    // Carrega os detalhes da turma
+    turma.alunos = await getAlunosParaTurma(turma.id!);
+    turma.provas = await getProvasParaTurma(turma.id!);
+    return turma;
+  } else {
+    throw Exception('Turma com ID $id não encontrada.');
+  }
+}
 }

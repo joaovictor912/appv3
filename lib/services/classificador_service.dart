@@ -14,9 +14,17 @@ class ClassificadorService {
     final labelsData = await rootBundle.loadString('assets/models/classificador_bolhas_labels.txt');
     _labels = labelsData.split('\n').where((label) => label.isNotEmpty).toList();
 
-    // SUGESTÃO 1: Corrigido o caminho do asset
     _interpreter = await Interpreter.fromAsset('assets/models/classificador_bolhas.tflite');
-
+      final inputDetails = _interpreter!.getInputTensor(0);
+      final outputDetails = _interpreter!.getOutputTensor(0);
+      print('--- DIAGNÓSTICO TFLITE ---');
+      print('ENTRADA (INPUT) Esperada:');
+      print('  - Tipo de Dado: ${inputDetails.type}');
+      print('  - Formato/Shape: ${inputDetails.shape}');
+      print('SAÍDA (OUTPUT) Esperada:');
+      print('  - Tipo de Dado: ${outputDetails.type}');
+      print('  - Formato/Shape: ${outputDetails.shape}');
+      print('--------------------------');
     _isInitialized = true;
   }
 
@@ -25,15 +33,16 @@ class ClassificadorService {
       throw Exception("Serviço não inicializado. Chame initialize() primeiro.");
     }
 
-    // SUGESTÃO 3: A entrada agora é um Float32List e o reshape é feito no final
+    // A entrada agora é um Uint8List, que será preparado pela função _prepararImagem
     final inputTensor = _prepararImagem(imageBytes);
+    // O reshape continua o mesmo, pois a estrutura [batch, height, width, channels] é a mesma
     final input = inputTensor.reshape([1, 224, 224, 3]);
 
-    var output = List.filled(_labels.length, 0.0).reshape([1, _labels.length]);
+    // A saída do modelo geralmente é em float, então mantemos a configuração da saída
+    var output = List.filled(1 * _labels.length, 0.0).reshape([1, _labels.length]);
 
     _interpreter!.run(input, output);
     
-    // SUGESTÃO 2: Lógica simplificada para encontrar o melhor resultado
     final outputList = output[0].cast<double>();
     double maiorValor = outputList.reduce((a, b) => a > b ? a : b);
     int indice = outputList.indexOf(maiorValor);
@@ -41,8 +50,9 @@ class ClassificadorService {
     return indice == -1 ? "desconhecido" : _labels[indice];
   }
   
-  // SUGESTÃO 3: Refatorado para usar Float32List para melhor performance
-  Float32List _prepararImagem(Uint8List imageBytes) {
+  // CORREÇÃO APLICADA AQUI
+  // A função agora retorna Uint8List e não divide os valores dos pixels.
+  Uint8List _prepararImagem(Uint8List imageBytes) {
     final originalImage = img.decodeImage(imageBytes);
     if (originalImage == null) {
       throw Exception("Não foi possível decodificar a imagem.");
@@ -50,14 +60,16 @@ class ClassificadorService {
 
     final resizedImage = img.copyResize(originalImage, width: 224, height: 224);
 
-    final inputBytes = Float32List(1 * 224 * 224 * 3);
+    // 1. Usamos Uint8List para armazenar inteiros de 0 a 255
+    final inputBytes = Uint8List(1 * 224 * 224 * 3);
     int pixelIndex = 0;
     for (var y = 0; y < 224; y++) {
       for (var x = 0; x < 224; x++) {
         final pixel = resizedImage.getPixel(x, y);
-        inputBytes[pixelIndex++] = pixel.r / 255.0;
-        inputBytes[pixelIndex++] = pixel.g / 255.0;
-        inputBytes[pixelIndex++] = pixel.b / 255.0;
+        // 2. Removemos a divisão por 255.0
+        inputBytes[pixelIndex++] = pixel.r.toInt();
+        inputBytes[pixelIndex++] = pixel.g.toInt();
+        inputBytes[pixelIndex++] = pixel.b.toInt();
       }
     }
     return inputBytes;
@@ -67,4 +79,5 @@ class ClassificadorService {
     _interpreter?.close();
     _isInitialized = false;
   }
+  
 }

@@ -2,7 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../models/aluno.dart';
 import '../models/prova.dart';
-import '../models/turma.dart'; // Importa o modelo Turma
+import '../models/turma.dart';
+import '../services/database_service.dart'; // Importa o nosso serviço
 import 'tela_da_camera.dart';
 import 'tela_lista_correcoes.dart';
 
@@ -27,24 +28,30 @@ class TelaDaProva extends StatefulWidget {
 class _TelaDaProvaState extends State<TelaDaProva> {
 
   Future<void> _iniciarCorrecao() async {
-    final nomesCorrigidos = widget.prova.correcoes.map((c) => c.nomeAluno).toSet();
-    // CORREÇÃO: Acessa a lista de alunos através de widget.turma.alunos
-    final alunosParaCorrigir = widget.turma.alunos.where((aluno) => !nomesCorrigidos.contains(aluno.nome)).toList();
+        final alunosDaTurma = await DatabaseService.instance.getAlunosParaTurma(widget.turma.id!);
 
-    if (widget.turma.alunos.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Adicione alunos à turma primeiro!"))
-        );
-        return;
+    // 2. VERIFICA SE A LISTA RECENTE ESTÁ VAZIA
+    if (alunosDaTurma.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Adicione alunos à turma primeiro!")),
+      );
+      return;
     }
-    
+
+    // 3. O RESTANTE DA LÓGICA AGORA USA A LISTA 'alunosDaTurma', GARANTINDO DADOS ATUALIZADOS
+    final nomesCorrigidos = widget.prova.correcoes.map((c) => c.nomeAluno).toSet();
+    final alunosParaCorrigir = alunosDaTurma.where((aluno) => !nomesCorrigidos.contains(aluno.nome)).toList();
+
     if (alunosParaCorrigir.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Todos os alunos já foram corrigidos!")),
       );
       return;
     }
-
+    
+    if (!mounted) return;
     final Aluno? alunoSelecionado = await showDialog<Aluno>(
       context: context,
       builder: (context) => AlertDialog(
@@ -68,7 +75,6 @@ class _TelaDaProvaState extends State<TelaDaProva> {
 
     if (alunoSelecionado != null) {
       if (!mounted) return;
-      
       final resultadoNavegacao = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
@@ -80,12 +86,12 @@ class _TelaDaProvaState extends State<TelaDaProva> {
           ),
         ),
       );
-      
       if (resultadoNavegacao == true) {
         setState(() {});
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

@@ -151,9 +151,9 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => TelaDaTurma(
-                            turma: turma,
-                            camera: widget.camera,
-                            onDadosAlterados: () => setState(() {}),
+                            turmaId: turma.id!, 
+                              camera: widget.camera,
+                                onDadosAlterados: () => setState(() {}),
                           ),
                         ),
                       );
