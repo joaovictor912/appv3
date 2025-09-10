@@ -6,12 +6,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 
-import 'services/classificador_service.dart'; // 👈 importa o classificador
+import 'services/classificador_service.dart'; 
 import 'screens/tela_principal.dart';
 import 'screens/tela_login.dart';
 
 late CameraDescription firstCamera;
-final classificador = ClassificadorService(); // 👈 instância global
+final classificador = ClassificadorService(); 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
