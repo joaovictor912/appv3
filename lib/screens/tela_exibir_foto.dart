@@ -72,14 +72,14 @@ class _TelaExibirFotoState extends State<TelaExibirFoto> {
       if (contornoDaFolha == null) {
         throw Exception("Não foi possível encontrar os 4 cantos da folha.");
       }
-
+      
       final folhaCorrigida = fourPointTransform(imagemOriginal, contornoDaFolha);
 
       final threshParaContornos = cv.threshold(
           cv.cvtColor(folhaCorrigida, cv.COLOR_BGR2GRAY), 0, 255, cv.THRESH_BINARY_INV | cv.THRESH_OTSU).$2;
 
       final (bolhasCnts, _) = cv.findContours(threshParaContornos, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
+      
       final List<cv.Rect> bolhasRects = [];
       for (var c in bolhasCnts.toList()) {
         final rect = cv.boundingRect(c);
@@ -88,11 +88,11 @@ class _TelaExibirFotoState extends State<TelaExibirFoto> {
           bolhasRects.add(rect);
         }
       }
-
+      
       if (bolhasRects.isEmpty || bolhasRects.length % 5 != 0) {
         throw Exception("Número de bolhas detectado é inválido: ${bolhasRects.length}");
       }
-
+      
       bolhasRects.sort((a, b) => a.y.compareTo(b.y));
 
       final Map<String, String> respostasDoAluno = {};
@@ -143,8 +143,10 @@ class _TelaExibirFotoState extends State<TelaExibirFoto> {
           ),
         ),
       );
+      
       if (!mounted) return;
       Navigator.of(context).pop();
+
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro na análise: ${e.toString()}')));
@@ -153,33 +155,39 @@ class _TelaExibirFotoState extends State<TelaExibirFoto> {
     }
   }
 
+  // FUNÇÃO CORRIGIDA
   cv.Mat fourPointTransform(cv.Mat image, cv.VecPoint pts) {
-    final rect = orderPoints(pts);
-    final (tl, tr, br, bl) = (rect[0], rect[1], rect[2], rect[3]);
+  final rect = orderPoints(pts);
+  final (tl, tr, br, bl) = (rect[0], rect[1], rect[2], rect[3]);
 
-    final widthA = sqrt(pow(br.x - bl.x, 2) + pow(br.y - bl.y, 2));
-    final widthB = sqrt(pow(tr.x - tl.x, 2) + pow(tr.y - tl.y, 2));
-    final maxWidth = max(widthA.toInt(), widthB.toInt());
+  final widthA = sqrt(pow(br.x - bl.x, 2) + pow(br.y - bl.y, 2));
+  final widthB = sqrt(pow(tr.x - tl.x, 2) + pow(tr.y - tl.y, 2));
+  final maxWidth = max(widthA.toInt(), widthB.toInt());
 
-    final heightA = sqrt(pow(tr.x - br.x, 2) + pow(tr.y - br.y, 2));
-    final heightB = sqrt(pow(tl.x - bl.x, 2) + pow(tl.y - bl.y, 2));
-    final maxHeight = max(heightA.toInt(), heightB.toInt());
+  final heightA = sqrt(pow(tr.x - br.x, 2) + pow(tr.y - br.y, 2));
+  final heightB = sqrt(pow(tl.x - bl.x, 2) + pow(tl.y - bl.y, 2));
+  final maxHeight = max(heightA.toInt(), heightB.toInt());
 
-    final dstPoints = [
-      [0.0, 0.0], [maxWidth - 1.0, 0.0], [maxWidth - 1.0, maxHeight - 1.0], [0.0, maxHeight - 1.0]
-    ].expand((p) => p).toList();
-    final dst = cv.Mat.fromList(4, 2, cv.CV_32F, dstPoints);
+  // CORREÇÃO: Criamos os pontos de destino e de origem como VecPoint,
+  // que é o tipo que a função getPerspectiveTransform espera.
+  
+  final dstPoints = [
+    cv.Point(0, 0),
+    cv.Point(maxWidth - 1, 0),
+    cv.Point(maxWidth - 1, maxHeight - 1),
+    cv.Point(0, maxHeight - 1),
+  ];
+  final dst = cv.VecPoint.fromList(dstPoints);
 
-    final srcPoints = [
-      [tl.x.toDouble(), tl.y.toDouble()], [tr.x.toDouble(), tr.y.toDouble()],
-      [br.x.toDouble(), br.y.toDouble()], [bl.x.toDouble(), bl.y.toDouble()]
-    ].expand((p) => p).toList();
-    final src = cv.Mat.fromList(4, 2, cv.CV_32F, srcPoints);
+  final srcPoints = [tl, tr, br, bl];
+  final src = cv.VecPoint.fromList(srcPoints);
 
-    final M = cv.getPerspectiveTransform(src, dst);
-    return cv.warpPerspective(image, M, (maxWidth, maxHeight));
-  }
+  // Agora a chamada é feita com os tipos corretos, sem precisar do 'as'.
+  final M = cv.getPerspectiveTransform(src, dst);
+  return cv.warpPerspective(image, M, (maxWidth, maxHeight));
+}
 
+  // FUNÇÃO RE-ADICIONADA
   List<cv.Point> orderPoints(cv.VecPoint pts) {
     List<cv.Point> rect = List.generate(4, (_) => cv.Point(0, 0));
     List<cv.Point> points = pts.toList();
