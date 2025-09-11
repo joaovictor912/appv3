@@ -10,14 +10,14 @@ class Turma {
   String nome;
   List<Aluno> alunos;
   List<Prova> provas;
-
-  int get numeroDeAlunos => alunos.length;
+  int numeroDeAlunos;
 
   Turma({
     this.id,
     required this.nome,
     this.alunos = const [],
     this.provas = const [],
+    this.numeroDeAlunos = 0,
   });
 
   // MÉTODO 'COPY' ADICIONADO AQUI

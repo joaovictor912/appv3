@@ -17,6 +17,7 @@ Turma _$TurmaFromJson(Map<String, dynamic> json) => Turma(
               ?.map((e) => Prova.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
+      numeroDeAlunos: (json['numeroDeAlunos'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$TurmaToJson(Turma instance) => <String, dynamic>{
@@ -24,4 +25,5 @@ Map<String, dynamic> _$TurmaToJson(Turma instance) => <String, dynamic>{
       'nome': instance.nome,
       'alunos': instance.alunos.map((e) => e.toJson()).toList(),
       'provas': instance.provas.map((e) => e.toJson()).toList(),
+      'numeroDeAlunos': instance.numeroDeAlunos,
     };

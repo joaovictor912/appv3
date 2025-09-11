@@ -14,9 +14,7 @@ class Aluno {
     required this.matricula,
   });
 
-  // --- MÉTODOS PARA O BANCO DE DADOS ---
 
-  /// Construtor para criar um Aluno a partir de um Map vindo do SQLite.
   factory Aluno.fromMap(Map<String, dynamic> map) {
     return Aluno(
       id: map['id'] as int?,

@@ -90,10 +90,27 @@ class DatabaseService {
   if (user == null) return [];
 
   final maps = await db.query('turmas', where: 'userId = ?', whereArgs: [user.uid]);
+
+  // Usamos Future.wait para fazer todas as buscas de contagem em paralelo
+  final turmas = await Future.wait(maps.map((turmaMap) async {
+    final turma = Turma.fromMap(turmaMap);
+    
+    // Query eficiente para contar alunos
+    final contagemAlunos = Sqflite.firstIntValue(await db.rawQuery(
+      'SELECT COUNT(*) FROM alunos WHERE turmaId = ?', [turma.id]
+    ));
+    // Query eficiente para contar provas
+    final contagemProvas = Sqflite.firstIntValue(await db.rawQuery(
+      'SELECT COUNT(*) FROM provas WHERE turmaId = ?', [turma.id]
+    ));
+
+    turma.numeroDeAlunos = contagemAlunos ?? 0;
+    turma.provas = List.filled(contagemProvas ?? 0, Prova(id: 0, nome: '', data: '')); // Apenas para a contagem
+
+    return turma;
+  }).toList());
   
-  // AGORA, ele só retorna a lista de turmas, sem carregar os detalhes (alunos e provas).
-  // Isso é muito mais rápido e eficiente.
-  return List.generate(maps.length, (i) => Turma.fromMap(maps[i]));
+  return turmas;
 }
 
   // --- MÉTODOS PARA PROVAS ---
